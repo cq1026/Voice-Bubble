@@ -1,12 +1,10 @@
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
-import type { KeyObject } from "node:crypto";
 import type { Config } from "./config.js";
-import type { RequestHandler } from "express";
-
+const keys = new Map<string, JWTVerifyGetKey>();
 export async function verifyOwner(
   token: string,
   config: Config,
-  key: JWTVerifyGetKey | KeyObject | CryptoKey | Uint8Array,
+  key: JWTVerifyGetKey | CryptoKey | Uint8Array,
 ) {
   const options = {
     issuer: config.issuer,
@@ -26,40 +24,45 @@ export async function verifyOwner(
     throw new Error("Missing scope");
   return result.payload;
 }
-export function authorization(config: Config): RequestHandler {
-  const key =
-    config.authMode === "oauth"
-      ? createRemoteJWKSet(new URL(config.jwksUrl!))
-      : null;
-  return async (req, res, next) => {
-    if (config.authMode === "local") {
-      if (
-        req.headers["x-forwarded-for"] ||
-        req.headers["x-forwarded-host"] ||
-        req.headers.forwarded
-      ) {
-        res
-          .status(403)
-          .json({
-            error:
-              "Local mode cannot be used behind a public proxy. Configure OAuth.",
-          });
-        return;
-      }
-      next();
-      return;
-    }
-    const token = req.headers.authorization?.match(/^Bearer (\S+)$/i)?.[1];
-    try {
-      if (!token) throw new Error();
-      await verifyOwner(token, config, key!);
-      next();
-    } catch {
-      res.set(
-        "WWW-Authenticate",
-        `Bearer resource_metadata="${config.baseUrl}/.well-known/oauth-protected-resource", scope="${config.scope}"`,
+export async function authorization(
+  request: Request,
+  config: Config,
+): Promise<Response | null> {
+  if (config.authMode === "local") {
+    const peer = request.headers.get("cf-connecting-ip");
+    // workerd's local server adds this header too; only a loopback peer is allowed.
+    if (
+      (peer !== null && !["127.0.0.1", "::1"].includes(peer)) ||
+      new URL(request.url).origin !== config.baseUrl ||
+      ["forwarded", "x-forwarded-for", "x-forwarded-host"].some((h) =>
+        request.headers.has(h),
+      )
+    )
+      return Response.json(
+        { error: "Local mode cannot be exposed through a proxy" },
+        { status: 403 },
       );
-      res.status(401).json({ error: "invalid_token" });
-    }
-  };
+    return null;
+  }
+  try {
+    const token = request.headers
+      .get("authorization")
+      ?.match(/^Bearer (\S+)$/i)?.[1];
+    if (!token) throw new Error();
+    if (!keys.has(config.jwksUrl!))
+      keys.set(config.jwksUrl!, createRemoteJWKSet(new URL(config.jwksUrl!)));
+    await verifyOwner(token, config, keys.get(config.jwksUrl!)!);
+    return null;
+  } catch {
+    return Response.json(
+      { error: "invalid_token" },
+      {
+        status: 401,
+        headers: {
+          "WWW-Authenticate": `Bearer resource_metadata="${config.baseUrl}/.well-known/oauth-protected-resource", scope="${config.scope}"`,
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  }
 }

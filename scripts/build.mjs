@@ -19,15 +19,6 @@ await writeFile(
   "dist/widget.html",
   `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body><div id="root"></div><script>${script}</script></body></html>`,
 );
-await build({
-  entryPoints: ["src/server/index.ts"],
-  outfile: "dist/server.mjs",
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  target: "node24",
-  packages: "external",
-});
 if (process.env.BUILD_TEST_HOST === "true") {
   const host = await build({
     entryPoints: ["tests/host/harness.ts"],
@@ -42,4 +33,6 @@ if (process.env.BUILD_TEST_HOST === "true") {
     `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;background:transparent}iframe{width:100%;height:72px;display:block;border:0}</style></head><body><iframe id="widget" title="Voice Bubble test host" sandbox="allow-scripts" src="/__test/widget"></iframe><script>${host.outputFiles[0].text.replaceAll("</script", "<\\/script")}</script></body></html>`,
   );
 }
-console.info("Built MCP server and self-contained UI resource.");
+console.info(
+  "Built self-contained MCP Apps UI resource. Wrangler bundles the Worker.",
+);

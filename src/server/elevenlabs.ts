@@ -56,12 +56,12 @@ export interface SpeechProvider {
     voice: string,
     model: string,
     settings: z.infer<typeof settingsSchema>,
-  ): Promise<Buffer>;
+  ): Promise<Uint8Array>;
 }
 export class ElevenLabs implements SpeechProvider {
   constructor(
     private config: Config,
-    private request: typeof fetch = fetch,
+    private request: typeof fetch = (input, init) => fetch(input, init),
   ) {}
   private async call(endpoint: string, init: RequestInit = {}, paid = false) {
     if (!this.config.apiKey)
@@ -75,7 +75,8 @@ export class ElevenLabs implements SpeechProvider {
         ...init,
         headers: { "xi-api-key": this.config.apiKey, ...init.headers },
         signal: AbortSignal.timeout(paid ? 90_000 : 15_000),
-        redirect: "error",
+        // Workers supports manual/follow; reject 3xx below so API keys never follow redirects.
+        redirect: "manual",
       });
     } catch {
       throw new SafeError(
@@ -129,7 +130,7 @@ export class ElevenLabs implements SpeechProvider {
       this.call("/v1/models").then((r) => r.json()),
     ]);
     if (
-      v.voice_id !== voice ||
+      z.object({ voice_id: z.string() }).parse(v).voice_id !== voice ||
       !Array.isArray(models) ||
       !models.some(
         (m) => m.model_id === model && m.can_do_text_to_speech === true,
@@ -162,17 +163,23 @@ export class ElevenLabs implements SpeechProvider {
       },
       true,
     );
-    const chunks: Buffer[] = [];
+    const chunks: Uint8Array[] = [];
     let size = 0;
     try {
       if (!response.body) throw new Error();
       for await (const chunk of response.body) {
         size += chunk.length;
-        if (size > 32 * 1024 * 1024) throw new Error();
-        chunks.push(Buffer.from(chunk));
+        if (size > 16 * 1024 * 1024) throw new Error();
+        chunks.push(chunk);
       }
       if (!size || size % 2) throw new Error();
-      return Buffer.concat(chunks);
+      const pcm = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) {
+        pcm.set(chunk, offset);
+        offset += chunk.length;
+      }
+      return pcm;
     } catch {
       throw new SafeError(
         "GENERATION_UNCERTAIN",

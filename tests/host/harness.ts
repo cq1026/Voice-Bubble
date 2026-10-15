@@ -17,7 +17,10 @@ async function rpc(method: string, params: unknown) {
     },
     body: JSON.stringify({ jsonrpc: "2.0", id: sequence++, method, params }),
   });
-  const body = await response.json();
+  const body = (await response.json()) as {
+    error?: unknown;
+    result: CallToolResult;
+  };
   if (!response.ok || body.error) throw new Error("Test MCP request failed");
   return body.result;
 }

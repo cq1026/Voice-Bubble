@@ -1,0 +1,4 @@
+# Local Wrangler only. Copy to .dev.vars; ignored by Git.
+# Public deployment must use `wrangler secret put`, never this example key.
+MEDIA_SIGNING_KEY=0000000000000000000000000000000000000000000000000000000000000000
+# No ElevenLabs secret is needed for demo playback.

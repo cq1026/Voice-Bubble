@@ -1,3 +1,4 @@
+import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/server/validators/cf-worker";
 import { McpServer } from "@modelcontextprotocol/server";
 import {
   registerAppResource,
@@ -50,7 +51,10 @@ async function safe(action: () => Promise<any> | any) {
   }
 }
 export function createMcpServer(service: VoiceService, html: string) {
-  const server = new McpServer({ name: "Voice Bubble", version: "0.1.0" });
+  const server = new McpServer(
+    { name: "Voice Bubble", version: "0.2.0" },
+    { jsonSchemaValidator: new CfWorkerJsonSchemaValidator() },
+  );
   const securitySchemes =
     service.config.authMode === "oauth"
       ? [{ type: "oauth2", scopes: [service.config.scope] }]

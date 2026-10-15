@@ -41,3 +41,18 @@ OpenAI 示例有部分仍使用 SDK 1.x 的服务端导入；本项目依据 MCP
 
 本地测试宿主使用 SDK 的 AppBridge；它能验证协议和真实浏览器行为，但不能替代
 ChatGPT 对 resource 元数据的处理、平台容器样式或移动客户端实际兼容性验收。
+
+## Cloudflare 迁移核对
+
+同日访问 `developers.cloudflare.com` 也遇到网络策略 403；实际读取 Cloudflare 官方文档仓库
+[cloudflare/cloudflare-docs](https://github.com/cloudflare/cloudflare-docs)，提交
+`7bbbb67b7a97eb1a4ea881f6abf120088ecadcee`，并核对安装的 Wrangler / Workers Types / MCP SDK：
+
+- [D1 Worker API](https://developers.cloudflare.com/d1/worker-api/d1-database/)：batch 事务、`withSession("first-primary")`、顺序一致性。
+- [R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/)：私有绑定、流式 body、Range 参数、写入强一致性。
+- [Workers Secrets](https://developers.cloudflare.com/workers/configuration/secrets/)：`.dev.vars` 与 `wrangler secret put`，后者会立即部署新版本。
+- [workers.dev](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)：账户子域和 `workers_dev`。
+- [Wrangler 配置](https://developers.cloudflare.com/workers/wrangler/configuration/)：Text/Data 模块、D1/R2 绑定和 observability。
+- 安装的 `@modelcontextprotocol/server` 2.3.1：`WebStandardStreamableHTTPServerTransport`、stateless JSON、32 KiB 请求上限、`CfWorkerJsonSchemaValidator`；Workers 中不使用 Node transport 或动态代码生成的校验器。
+
+官方源码核对与本地 workerd 测试不能替代 Cloudflare 账户权限、线上配额或 ChatGPT 的真实接入测试。

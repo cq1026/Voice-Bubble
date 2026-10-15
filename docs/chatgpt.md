@@ -5,7 +5,7 @@
 
 ## 第一步：部署和账户条件
 
-先完成 [部署说明](deployment.md)，准备：
+先完成 [Cloudflare 部署说明](cloudflare.md)，准备：
 
 1. 可从外网访问的 HTTPS MCP 地址，路径为 `/mcp`。
 2. 已配置的 OAuth 身份提供商、准确的 audience 和你自己的 owner sub。
@@ -19,7 +19,7 @@
 
 1. 在 ChatGPT 设置的 Apps/Connectors 中启用 Developer mode（如果当前界面和账户支持）。
 2. 创建自定义 app/connector，名称填 **Voice Bubble**。
-3. MCP URL 填 `https://你的域名/mcp`，认证选择 OAuth。
+3. MCP URL 填 `https://voice-bubble.<你的子域>.workers.dev/mcp`，认证选择 OAuth。
 4. 按界面要求填写 OAuth client ID/secret，或使用提供商已开启的动态客户端注册流程。
    将 ChatGPT 显示的回调 URL 加入提供商 allowlist。
 5. 使用 `OAUTH_OWNER_SUB` 对应的个人账号授权。授权失败时检查 issuer、audience、`voice:use` scope 和 sub；不要改为公网免认证。
@@ -55,9 +55,9 @@
 
 ## 第四步：你明确触发一次 ElevenLabs 生成
 
-1. 在服务端安全设置 `ELEVENLABS_API_KEY`；聊天中不要输入 Key。
+1. 当前版本保持关闭。以后明确启用时，使用 `npx wrangler secret put ELEVENLABS_API_KEY` 设置 Workers Secret；聊天中不要输入 Key。
 2. 读取音色列表，设置默认音色 `ELEVENLABS_VOICE_ID`。不要使用本文中虚构的音色 ID，本文没有提供默认假 ID。
-3. 你明确同意启用真实付费调用后再开启 `ENABLE_PAID_GENERATION=true` 并重启。
+3. 你明确同意启用真实付费调用后，再修改 Wrangler 中的付费开关和 demo 发布保护并重新部署；当前任务不执行这个步骤。
 4. 请求一段短句，明确确认本次生成费用。工具参数需带 `confirm_paid_generation: true`。
 5. 检查生成的气泡没有“测试音频”标记，可播放真实内容。
 6. 记录工具结果里的 `audioId`，再次调用 `get_voice_bubble`；确认没有新生成或额外费用。
@@ -67,6 +67,7 @@
 
 ## 本次未能代你验证的事项
 
-没有接入你的 ChatGPT 账户、公网域名、OAuth tenant 或 ElevenLabs 密钥，也没有触发真实计费。
+Workers 本地 MCP、R2/D1、OAuth 校验及浏览器播放已经验证。尚未获得你的 Cloudflare 登录，
+也没有接入真实 workers.dev、ChatGPT 账户、OAuth tenant 或 ElevenLabs 密钥，没有触发真实计费。
 因此本地浏览器结果不能标记为 ChatGPT 实测通过；移动 ChatGPT、平台容器最终表现、
 真实 OAuth 连接、真实 ElevenLabs 音质和账户模型权限均需按上面步骤验收。

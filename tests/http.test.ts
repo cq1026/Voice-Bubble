@@ -1,80 +1,68 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { createApplication } from "../src/server/app.js";
-import { readConfig } from "../src/server/config.js";
+import { generateKeyPair, SignJWT, exportJWK } from "jose";
+import { Response as MFResponse } from "miniflare";
+import { makeRuntime, localBindings } from "./worker/runtime.js";
 import { RESOURCE_URI } from "../src/server/mcp.js";
-import { generateKeyPair, SignJWT } from "jose";
-import { verifyOwner } from "../src/server/auth.js";
-import type { Server } from "node:http";
-
-const directory = mkdtempSync(path.join(tmpdir(), "vb-http-"));
-const config = readConfig({
-  PORT: "3199",
-  PUBLIC_BASE_URL: "http://127.0.0.1:3199",
-  DATA_DIR: path.join(directory, ".data"),
-});
-const runtime = createApplication(config, {
-  html: '<!doctype html><div id="test-widget"></div>',
-});
-let server: Server;
+let c: Awaited<ReturnType<typeof makeRuntime>>;
 before(async () => {
-  await new Promise<void>((resolve, reject) => {
-    server = runtime.app.listen(config.port, config.host, (error) =>
-      error ? reject(error) : resolve(),
-    );
-  });
+  c = await makeRuntime();
 });
 after(async () => {
-  await new Promise<void>((resolve, reject) =>
-    server.close((e) => (e ? reject(e) : resolve())),
-  );
-  runtime.store.close();
-  rmSync(directory, { recursive: true, force: true });
+  await c.mf.dispose();
 });
-let id = 1;
+let sequence = 0;
 async function rpc(method: string, params: unknown) {
-  const response = await fetch(`${config.baseUrl}/mcp`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json, text/event-stream",
+  const response = await c.mf.dispatchFetch(
+    `${localBindings.PUBLIC_BASE_URL}/mcp`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: ++sequence, method, params }),
     },
-    body: JSON.stringify({ jsonrpc: "2.0", id: id++, method, params }),
-  });
-  assert.equal(response.status, 200);
-  const data = await response.json();
-  assert.ok(!data.error, JSON.stringify(data.error));
-  return data.result;
+  );
+  assert.equal(response.status, 200, await response.clone().text());
+  const body = (await response.json()) as any;
+  assert.ok(!body.error, JSON.stringify(body.error));
+  return body.result;
 }
-test("real HTTP MCP initialization, tools and embedded UI resource metadata", async () => {
+test("production Worker bundle handles MCP initialization, tools and official borderless resource", async () => {
   const init = await rpc("initialize", {
     protocolVersion: "2025-11-25",
     capabilities: {},
     clientInfo: { name: "test", version: "1" },
   });
   assert.equal(init.serverInfo.name, "Voice Bubble");
-  const tools = await rpc("tools/list", {});
-  assert.equal(tools.tools.length, 3);
+  const list = await rpc("tools/list", {});
+  assert.equal(list.tools.length, 3);
   assert.equal(
-    tools.tools.find((t: any) => t.name === "get_voice_bubble")._meta.ui
+    list.tools.find((t: any) => t.name === "get_voice_bubble")._meta.ui
       .resourceUri,
     RESOURCE_URI,
   );
-  const resource = await rpc("resources/read", { uri: RESOURCE_URI });
-  assert.equal(resource.contents[0].mimeType, "text/html;profile=mcp-app");
-  assert.equal(resource.contents[0]._meta.ui.prefersBorder, false);
-  assert.equal(resource.contents[0]._meta["openai/widgetPrefersBorder"], false);
-  assert.deepEqual(resource.contents[0]._meta.ui.csp.resourceDomains, [
-    config.baseUrl,
+  const resource = await rpc("resources/read", { uri: RESOURCE_URI }),
+    item = resource.contents[0];
+  assert.equal(item.mimeType, "text/html;profile=mcp-app");
+  assert.equal(item._meta.ui.prefersBorder, false);
+  assert.equal(item._meta["openai/widgetPrefersBorder"], false);
+  assert.deepEqual(item._meta.ui.csp.resourceDomains, [
+    localBindings.PUBLIC_BASE_URL,
   ]);
-  assert.deepEqual(resource.contents[0]._meta.ui.csp.connectDomains, [
-    config.baseUrl,
+  assert.deepEqual(item._meta.ui.csp.connectDomains, [
+    localBindings.PUBLIC_BASE_URL,
   ]);
+  assert.ok(!item.text.includes("ELEVENLABS_API_KEY"));
+  assert.ok(!item.text.includes(localBindings.MEDIA_SIGNING_KEY));
+  assert.equal(
+    (await c.mf.dispatchFetch(`${localBindings.PUBLIC_BASE_URL}/__test/host`))
+      .status,
+    404,
+  );
 });
-test("MCP audio result uses private metadata for URL and supports CORS, HEAD, byte ranges and expiry", async () => {
+test("R2-backed signed media supports real CORS, HEAD, range, suffix, If-Range and invalid ranges", async () => {
   const result = await rpc("tools/call", {
     name: "get_voice_bubble",
     arguments: { audio_id: "demo" },
@@ -83,34 +71,122 @@ test("MCP audio result uses private metadata for URL and supports CORS, HEAD, by
   assert.equal(result.structuredContent.waveform.length, 64);
   assert.ok(!JSON.stringify(result.structuredContent).includes("sig="));
   const url = result._meta.playback.url;
-  const range = await fetch(url, {
+  const full = await c.mf.dispatchFetch(url),
+    bytes = new Uint8Array(await full.arrayBuffer());
+  assert.equal(full.status, 200);
+  assert.equal(bytes.byteLength, 437118);
+  const range = await c.mf.dispatchFetch(url, {
     headers: { Range: "bytes=0-43", Origin: "null" },
   });
   assert.equal(range.status, 206);
   assert.equal(range.headers.get("access-control-allow-origin"), "*");
+  assert.equal(range.headers.get("access-control-allow-credentials"), null);
   assert.equal(range.headers.get("accept-ranges"), "bytes");
-  assert.match(range.headers.get("content-range")!, /^bytes 0-43\//);
-  assert.equal((await range.arrayBuffer()).byteLength, 44);
-  const head = await fetch(url, { method: "HEAD" });
+  assert.equal(range.headers.get("content-range"), "bytes 0-43/437118");
+  assert.deepEqual(
+    new Uint8Array(await range.arrayBuffer()),
+    bytes.subarray(0, 44),
+  );
+  const head = await c.mf.dispatchFetch(url, { method: "HEAD" });
   assert.equal(head.status, 200);
   assert.equal(await head.text(), "");
-  const suffix = await fetch(url, { headers: { Range: "bytes=-20" } });
+  assert.equal(Number(head.headers.get("content-length")), bytes.length);
+  const suffix = await c.mf.dispatchFetch(url, {
+    headers: { Range: "bytes=-20" },
+  });
   assert.equal(suffix.status, 206);
-  assert.equal((await suffix.arrayBuffer()).byteLength, 20);
-  const invalid = await fetch(url, { headers: { Range: "bytes=9999999-" } });
-  assert.equal(invalid.status, 416);
-  const expired = await fetch(url.replace(/expires=\d+/, "expires=1"));
+  assert.deepEqual(
+    new Uint8Array(await suffix.arrayBuffer()),
+    bytes.slice(-20),
+  );
+  for (const value of [
+    "bytes=9999999-",
+    "bytes=20-10",
+    "bytes=-0",
+    "bytes=0-10,20-30",
+    "bytes=-",
+    "bad",
+  ]) {
+    const invalid = await c.mf.dispatchFetch(url, {
+      headers: { Range: value },
+    });
+    assert.equal(invalid.status, 416, value);
+    assert.equal(
+      invalid.headers.get("content-range"),
+      `bytes */${bytes.length}`,
+    );
+  }
+  assert.equal(
+    (
+      await c.mf.dispatchFetch(url, {
+        headers: { Range: "bytes=0-43", "If-Range": '"wrong"' },
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await c.mf.dispatchFetch(url, {
+        headers: { Range: "bytes=0-43", "If-Range": head.headers.get("etag")! },
+      })
+    ).status,
+    206,
+  );
+  assert.equal(
+    (
+      await c.mf.dispatchFetch(url, {
+        method: "OPTIONS",
+        headers: { Origin: "null", "Access-Control-Request-Headers": "Range" },
+      })
+    ).status,
+    204,
+  );
+});
+test("expired/tampered links are denied; reread returns the same stable ID without generation", async () => {
+  const result = await rpc("tools/call", {
+    name: "get_voice_bubble",
+    arguments: { audio_id: "demo" },
+  });
+  const expired = await c.mf.dispatchFetch(
+    result._meta.playback.url.replace(/expires=\d+/, "expires=1"),
+  );
   assert.equal(expired.status, 403);
+  assert.equal(expired.headers.get("access-control-allow-origin"), "*");
+  assert.equal(
+    (
+      await c.mf.dispatchFetch(
+        result._meta.playback.url.replace(
+          /sig=[a-f0-9]+/,
+          `sig=${"0".repeat(64)}`,
+        ),
+      )
+    ).status,
+    403,
+  );
   const refreshed = await rpc("tools/call", {
     name: "get_voice_bubble",
     arguments: { audio_id: result.structuredContent.audioId },
   });
-  assert.equal((await fetch(refreshed._meta.playback.url)).status, 200);
+  assert.equal(
+    refreshed.structuredContent.audioId,
+    result.structuredContent.audioId,
+  );
+  assert.equal(
+    (await c.mf.dispatchFetch(refreshed._meta.playback.url)).status,
+    200,
+  );
+  assert.equal(
+    (await c.db
+      .prepare("SELECT count(*) AS n FROM jobs")
+      .first<{ n: number }>())!.n,
+    0,
+  );
 });
-test("CORS rejects arbitrary origins on MCP while signed audio needs no credentials", async () => {
+test("MCP rejects arbitrary origins, proxy-exposed local mode, and oversized request bodies", async () => {
+  const url = `${localBindings.PUBLIC_BASE_URL}/mcp`;
   assert.equal(
     (
-      await fetch(`${config.baseUrl}/mcp`, {
+      await c.mf.dispatchFetch(url, {
         method: "OPTIONS",
         headers: { Origin: "https://evil.example" },
       })
@@ -119,30 +195,42 @@ test("CORS rejects arbitrary origins on MCP while signed audio needs no credenti
   );
   assert.equal(
     (
-      await fetch(`${config.baseUrl}/mcp`, {
+      await c.mf.dispatchFetch(url, {
         method: "OPTIONS",
         headers: { Origin: "https://chatgpt.com" },
       })
     ).status,
     204,
   );
+  for (const header of ["X-Forwarded-For", "Forwarded", "CF-Connecting-IP"]) {
+    assert.equal(
+      (await c.mf.dispatchFetch(url, { headers: { [header]: "203.0.113.1" } }))
+        .status,
+      403,
+    );
+  }
   assert.equal(
-    (
-      await fetch(`${config.baseUrl}/mcp`, {
-        headers: { "X-Forwarded-For": "203.0.113.1" },
-      })
-    ).status,
+    (await c.mf.dispatchFetch("https://public.example/mcp")).status,
     403,
   );
+  assert.equal(
+    (
+      await c.mf.dispatchFetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+        },
+        body: " ".repeat(33000),
+      })
+    ).status,
+    413,
+  );
 });
-test("tools return safe errors without pretending a failed generation succeeded", async () => {
+test("paid generation stays disabled in the Worker and safe errors never claim success", async () => {
   const result = await rpc("tools/call", {
     name: "generate_voice_bubble",
-    arguments: {
-      text: "Test",
-      voice_id: "test-voice",
-      confirm_paid_generation: true,
-    },
+    arguments: { text: "Test", confirm_paid_generation: true },
   });
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /PAID_GENERATION_DISABLED/);
@@ -154,35 +242,184 @@ test("tools return safe errors without pretending a failed generation succeeded"
   assert.equal(missing.isError, true);
   assert.match(missing.content[0].text, /AUDIO_NOT_FOUND/);
 });
-test("OAuth verifies signature, issuer, audience, owner, expiry and scope", async () => {
-  const { privateKey, publicKey } = await generateKeyPair("RS256");
-  const cfg = {
-    ...config,
-    issuer: "https://identity.example/",
-    ownerSub: "owner-123",
-    audience: "https://voice.example/mcp",
+test("OAuth discovery and owner JWT verification execute inside workerd with a fixture JWKS", async () => {
+  const { privateKey, publicKey } = await generateKeyPair("RS256"),
+    jwk = await exportJWK(publicKey);
+  const origin = "https://voice-bubble.test-subdomain.workers.dev",
+    issuer = "https://identity.example/";
+  const bindings = {
+    ...localBindings,
+    AUTH_MODE: "oauth",
+    PUBLIC_BASE_URL: origin,
+    OAUTH_ISSUER: issuer,
+    OAUTH_JWKS_URL: `${issuer}.well-known/jwks.json`,
+    OAUTH_OWNER_SUB: "owner-123",
   };
+  let jwksFetches = 0,
+    unexpectedFetches = 0;
+  const runtime = await makeRuntime({
+    bindings,
+    outboundService: async (request) => {
+      if (request.url === bindings.OAUTH_JWKS_URL) {
+        jwksFetches++;
+        return MFResponse.json({
+          keys: [{ ...jwk, kid: "test-key", alg: "RS256", use: "sig" }],
+        });
+      }
+      unexpectedFetches++;
+      return new MFResponse(null, { status: 503 });
+    },
+  });
   async function token(overrides: Record<string, unknown> = {}) {
     return new SignJWT({ scope: "voice:use", ...overrides })
-      .setProtectedHeader({ alg: "RS256" })
-      .setIssuer(String(overrides.iss ?? cfg.issuer))
-      .setAudience(String(overrides.aud ?? cfg.audience))
-      .setSubject(String(overrides.sub ?? cfg.ownerSub))
+      .setProtectedHeader({ alg: "RS256", kid: "test-key" })
+      .setIssuer(String(overrides.iss ?? issuer))
+      .setAudience(String(overrides.aud ?? `${origin}/mcp`))
+      .setSubject(String(overrides.sub ?? "owner-123"))
       .setIssuedAt()
       .setExpirationTime((overrides.exp as number) ?? "5m")
       .sign(privateKey);
   }
-  assert.equal(
-    (await verifyOwner(await token(), cfg, publicKey)).sub,
-    "owner-123",
-  );
-  for (const bad of [
-    { sub: "other-person" },
-    { aud: "wrong-audience" },
-    { iss: "https://attacker.example/" },
-    { scope: "other" },
-    { exp: 1 },
-  ])
-    await assert.rejects(verifyOwner(await token(bad), cfg, publicKey));
-  await assert.rejects(verifyOwner("not-a-jwt", cfg, publicKey));
+  async function call(jwt?: string) {
+    return runtime.mf.dispatchFetch(`${origin}/mcp`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+        ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "get_voice_bubble", arguments: { audio_id: "demo" } },
+      }),
+    });
+  }
+  try {
+    const denied = await call();
+    assert.equal(denied.status, 401);
+    assert.match(
+      denied.headers.get("www-authenticate")!,
+      /oauth-protected-resource/,
+    );
+    for (const route of [
+      "/.well-known/oauth-protected-resource",
+      "/.well-known/oauth-protected-resource/mcp",
+    ]) {
+      const metadata = (await (
+        await runtime.mf.dispatchFetch(origin + route)
+      ).json()) as any;
+      assert.equal(metadata.resource, `${origin}/mcp`);
+      assert.deepEqual(metadata.authorization_servers, [issuer]);
+    }
+    const success = await call(await token());
+    assert.equal(success.status, 200);
+    const result = ((await success.json()) as any).result;
+    assert.equal(result.structuredContent.source, "test");
+    assert.equal(
+      (
+        await runtime.mf.dispatchFetch(result._meta.playback.url, {
+          headers: { Range: "bytes=0-43" },
+        })
+      ).status,
+      206,
+    );
+    for (const bad of [
+      { sub: "other-person" },
+      { aud: "wrong" },
+      { iss: "https://attacker.example/" },
+      { scope: "other" },
+      { exp: 1 },
+    ])
+      assert.equal((await call(await token(bad))).status, 401);
+    assert.equal((await call("not-a-jwt")).status, 401);
+    assert.equal(
+      (await runtime.mf.dispatchFetch(`${origin}/__test/host`)).status,
+      404,
+    );
+    assert.ok(jwksFetches >= 1);
+    assert.equal(unexpectedFetches, 0);
+  } finally {
+    await runtime.mf.dispose();
+  }
+});
+test("full Worker ElevenLabs adapter coalesces concurrent MCP calls against a network-isolated fake upstream", async () => {
+  let syntheses = 0;
+  const runtime = await makeRuntime({
+    bindings: {
+      ...localBindings,
+      ENABLE_PAID_GENERATION: "true",
+      ELEVENLABS_API_KEY: "mock-worker-key",
+    },
+    outboundService: async (request) => {
+      const url = new URL(request.url);
+      assert.equal(url.origin, "https://api.elevenlabs.io");
+      assert.equal(request.headers.get("xi-api-key"), "mock-worker-key");
+      if (url.pathname.startsWith("/v1/text-to-speech/")) {
+        syntheses++;
+        assert.equal(url.searchParams.get("output_format"), "pcm_24000");
+        await new Promise((r) => setTimeout(r, 100));
+        return new MFResponse(new Uint8Array(48000));
+      }
+      if (url.pathname === "/v1/models")
+        return MFResponse.json([
+          { model_id: "eleven_multilingual_v2", can_do_text_to_speech: true },
+        ]);
+      return MFResponse.json({ voice_id: "voice-from-test-provider" });
+    },
+  });
+  async function generate(id: number) {
+    const response = await runtime.mf.dispatchFetch(
+      `${localBindings.PUBLIC_BASE_URL}/mcp`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          method: "tools/call",
+          params: {
+            name: "generate_voice_bubble",
+            arguments: {
+              text: "mocked Worker generation",
+              confirm_paid_generation: true,
+              request_id: "worker-test",
+            },
+          },
+        }),
+      },
+    );
+    return ((await response.json()) as any).result;
+  }
+  try {
+    const results = await Promise.all(
+      Array.from({ length: 8 }, (_, i) => generate(i + 1)),
+    );
+    for (const result of results) {
+      assert.ok(!result.isError, JSON.stringify(result.content));
+      assert.equal(result.structuredContent.durationSeconds, 1);
+    }
+    assert.equal(
+      new Set(results.map((r) => r.structuredContent.audioId)).size,
+      1,
+    );
+    assert.equal(syntheses, 1);
+    const replay = await generate(10);
+    assert.equal(
+      replay.structuredContent.audioId,
+      results[0].structuredContent.audioId,
+    );
+    assert.equal(syntheses, 1);
+    assert.equal(
+      (await runtime.mf.dispatchFetch(replay._meta.playback.url)).status,
+      200,
+    );
+    assert.ok(!JSON.stringify(results).includes("mock-worker-key"));
+  } finally {
+    await runtime.mf.dispose();
+  }
 });

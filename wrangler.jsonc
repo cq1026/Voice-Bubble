@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "voice-bubble",
+  "main": "src/server/app.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "build": { "command": "npm run build" },
+  "rules": [
+    { "type": "Text", "globs": ["**/*.html"], "fallthrough": true },
+    { "type": "Data", "globs": ["**/*.wav"], "fallthrough": true },
+  ],
+  "observability": { "enabled": false },
+  "vars": {
+    "AUTH_MODE": "oauth",
+    "PUBLIC_BASE_URL": "https://voice-bubble.YOUR-SUBDOMAIN.workers.dev",
+    "OAUTH_ISSUER": "https://YOUR-TENANT.auth0.com/",
+    "OAUTH_JWKS_URL": "https://YOUR-TENANT.auth0.com/.well-known/jwks.json",
+    "ENABLE_PAID_GENERATION": "false",
+    "ELEVENLABS_MODEL_ID": "eleven_multilingual_v2",
+    "BUBBLE_PALETTE": "lavender",
+    "MEDIA_URL_TTL_SECONDS": "600",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "voice-bubble",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "r2_buckets": [{ "binding": "AUDIO", "bucket_name": "voice-bubble-audio" }],
+}
