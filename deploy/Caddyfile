@@ -1,0 +1,6 @@
+{$VOICE_BUBBLE_DOMAIN} {
+    reverse_proxy voice-bubble:3000
+    # Access logging deliberately not enabled: audio query strings contain short-lived capabilities.
+    header Referrer-Policy "no-referrer"
+    header X-Content-Type-Options "nosniff"
+}
