@@ -3,6 +3,29 @@
 这是 **ChatGPT App / MCP Apps**，不是浏览器扩展或旧版 ai-plugin manifest 插件。
 交付物核心是 MCP 工具 + ChatGPT 内嵌 UI resource。
 
+## 本次已部署配置（2026-10-16）
+
+服务已上线并完成真实 Auth0 本人登录、MCP 和 demo 浏览器播放检查。
+当前官方入口为 [ChatGPT Plugins](https://chatgpt.com/plugins) → 加号 → **Add custom MCP server**。
+在同一个创建表单中填写：
+
+| 字段 | 值 |
+| --- | --- |
+| 名称 | Voice Bubble |
+| MCP URL | `https://voice-bubble.296056703.workers.dev/mcp` |
+| Authentication | OAuth，使用预先注册的客户端 |
+| Client ID | `n7shXMEuTBs7DzxO2mOwAhymheFaRkfU` |
+| Client Secret | 留空；本项目使用 public client + PKCE，`token_endpoint_auth_method=none` |
+
+登录时使用首次 Voice-Bubble 设备登录时选择的同一应用用户；服务只接受该用户的 subject。
+已注册回调 `https://chatgpt.com/connector_platform_oauth_redirect`，Auth0 提供 RFC 9207 issuer identification。
+如果当前 ChatGPT 表单显示不同的回调，只提供这个非秘密 URL 让部署者更新，不使用通配符。
+不要把客户端密钥、密码或令牌发到聊天。
+
+本人已确认 ChatGPT 内 demo 正常显示并可听到测试音频。接入后使用 `get_voice_bubble(audio_id="demo")`。
+当前参考：[官方接入步骤](https://developers.openai.com/plugins/deploy/connect-chatgpt)、
+[OAuth 与回调说明](https://developers.openai.com/plugins/build/auth)。下方是通用接入和验收说明。
+
 ## 第一步：部署和账户条件
 
 先完成 [Cloudflare 部署说明](cloudflare.md)，准备：
@@ -28,7 +51,7 @@
 
 ## 第三步：先验收已有测试音频
 
-保持服务端 `ENABLE_PAID_GENERATION=false`。向 ChatGPT 发送：
+demo 不调用付费 API，生产开关开启时仍可安全测试。向 ChatGPT 发送：
 
 > 使用 Voice Bubble 的 get_voice_bubble，audio_id 设为 demo。只播放已有测试音频，不调用 ElevenLabs 生成。
 
@@ -55,19 +78,23 @@
 
 ## 第四步：你明确触发一次 ElevenLabs 生成
 
-1. 当前版本保持关闭。以后明确启用时，使用 `npx wrangler secret put ELEVENLABS_API_KEY` 设置 Workers Secret；聊天中不要输入 Key。
-2. 读取音色列表，设置默认音色 `ELEVENLABS_VOICE_ID`。不要使用本文中虚构的音色 ID，本文没有提供默认假 ID。
-3. 你明确同意启用真实付费调用后，再修改 Wrangler 中的付费开关和 demo 发布保护并重新部署；当前任务不执行这个步骤。
-4. 请求一段短句，明确确认本次生成费用。工具参数需带 `confirm_paid_generation: true`。
-5. 检查生成的气泡没有“测试音频”标记，可播放真实内容。
-6. 记录工具结果里的 `audioId`，再次调用 `get_voice_bubble`；确认没有新生成或额外费用。
+1. 正式环境已配置 ElevenLabs Secret；发布配置启用 `ENABLE_PAID_GENERATION=true`，默认模型 `eleven_v4`。
+2. 在 ChatGPT 的应用设置中刷新 Voice Bubble 工具信息，以读取更新后的模型说明，再在新对话中选择它。
+3. 先读取 `list_voice_options`，按真实名称找到音色 ID；重名时选择准确音色。无需修改 Cloudflare 后台。
+4. 明确请求：“使用 Eleven v4 和 Kai 的音色朗读：你好，这是我的语音气泡。允许本次付费生成。”
+5. ChatGPT 使用真实 `voice_id`、`model_id="eleven_v4"` 和 `confirm_paid_generation: true`。没有明确付费授权时不得调用。
+6. 可改说“这次用 Eleven v4 Turbo”或“用 Kai英文版和 multilingual v2”，工具会优先使用指定值。
+7. 保存返回的 `audioId`；重播调用 `get_voice_bubble`，相同文本、音色、模型、有效设置也会复用音频。
+
+v4 系列会忽略 `style`、`speed`、`use_speaker_boost`，可设置 `stability` 和 `similarity_boost`。
+生成速度设置与播放器的 1×/1.5×/2×播放速度是两回事；后者不变。
 
 失败提示 `GENERATION_NOT_RETRIED` 或 `GENERATION_UNCERTAIN` 时，先查 ElevenLabs
 历史/用量。只有你明确愿意再尝试并接受可能的再次费用时才使用 `retry_failed: true`。
 
-## 本次未能代你验证的事项
+## 验证边界
 
-Workers 本地 MCP、R2/D1、OAuth 校验及浏览器播放已经验证。尚未获得你的 Cloudflare 登录，
-也没有接入真实 workers.dev、ChatGPT 账户、OAuth tenant 或 ElevenLabs 密钥，没有触发真实计费。
-因此本地浏览器结果不能标记为 ChatGPT 实测通过；移动 ChatGPT、平台容器最终表现、
-真实 OAuth 连接、真实 ElevenLabs 音质和账户模型权限均需按上面步骤验收。
+本人已确认 ChatGPT demo 和真实 ElevenLabs 音色列表成功。自动测试仅使用模拟生成响应，
+不调用真实付费 TTS。真实 v4/v4 Turbo 音质、账户实际输出格式权限和首次完整生成链路，
+仍需本人通过上述明确授权的请求验收。Worker 仅校验 OAuth 本人身份与确认参数；
+“用户明确同意”的对话判断由 ChatGPT 按工具说明完成。

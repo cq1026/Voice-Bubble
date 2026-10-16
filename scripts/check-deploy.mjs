@@ -17,8 +17,8 @@ const checks = [
     "AUTH_MODE must remain oauth for public deployment",
   ],
   [
-    config.vars.ENABLE_PAID_GENERATION === "false",
-    "This demo release must keep ENABLE_PAID_GENERATION=false",
+    ["true", "false"].includes(config.vars.ENABLE_PAID_GENERATION),
+    'ENABLE_PAID_GENERATION must be the explicit string "true" or "false"',
   ],
   [config.workers_dev === true, "workers_dev must be enabled"],
   [

@@ -1,0 +1,95 @@
+{
+  "voice-bubble-live-report": {
+    "health": {
+      "ok": true,
+      "storage": "d1+r2",
+      "paidGeneration": false
+    },
+    "oauthMetadata": {
+      "resource": "https://voice-bubble.296056703.workers.dev/mcp",
+      "authorization_servers": [
+        "https://dev-8wtgry41v4vu7opw.us.auth0.com/"
+      ],
+      "scopes_supported": [
+        "voice:use"
+      ],
+      "bearer_methods_supported": [
+        "header"
+      ]
+    },
+    "unauthenticatedMcpStatus": 401,
+    "invalidTokenStatus": 401,
+    "serverInfo": {
+      "name": "Voice Bubble",
+      "version": "0.2.0"
+    },
+    "protocolVersion": "2025-11-25",
+    "tools": [
+      "get_voice_bubble",
+      "generate_voice_bubble",
+      "list_voice_options"
+    ],
+    "widget": {
+      "mimeType": "text/html;profile=mcp-app",
+      "htmlBytes": 834673,
+      "cspOrigin": "https://voice-bubble.296056703.workers.dev",
+      "prefersBorder": false
+    },
+    "demo": {
+      "audioId": "vb_7b273d46aaa99868bde20e5948b94654ffb7564e62a008070abded243b6dcb74",
+      "durationSeconds": 9.105,
+      "waveformBins": 64,
+      "wavBytes": 437118,
+      "fixtureSha256Matches": true
+    },
+    "range": {
+      "status": 206,
+      "contentRange": "bytes 0-63/437118",
+      "bytes": 64,
+      "cors": "*"
+    },
+    "headStatus": 200,
+    "unsignedMediaStatus": 403,
+    "expiredMediaStatus": 403,
+    "replayStableId": true,
+    "paidGenerationInvoked": false
+  },
+  "voice-bubble-live-browser-report": {
+    "productionWidget": true,
+    "liveSignedAudio": true,
+    "host": "local official MCP Apps AppBridge harness",
+    "chatGPTTested": false,
+    "autoplay": false,
+    "play": true,
+    "pause": true,
+    "seek": true,
+    "speeds": [
+      1,
+      1.5,
+      2
+    ],
+    "duration": 9.105,
+    "media": [
+      {
+        "status": 206,
+        "origin": "https://voice-bubble.296056703.workers.dev"
+      },
+      {
+        "status": 206,
+        "origin": "https://voice-bubble.296056703.workers.dev"
+      }
+    ]
+  },
+  "voice-bubble-oauth-preflight": {
+    "callbackOrigin": "https://chatgpt.com",
+    "callbackPath": "/connector_platform_oauth_redirect",
+    "oauthError": [
+      "login_required"
+    ],
+    "issuerMatches": true,
+    "stateMatches": true,
+    "parameter": "resource",
+    "pkce": "S256",
+    "userLoginRequired": true
+  }
+}

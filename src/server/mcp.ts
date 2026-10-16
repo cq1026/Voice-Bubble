@@ -110,7 +110,7 @@ export function createMcpServer(service: VoiceService, html: string) {
     {
       title: "生成语音气泡（付费）",
       description:
-        "仅当用户明确要求调用 ElevenLabs 付费生成语音时使用。默认音色由服务端配置，其他音色必须来自 list_voice_options，不能编造。相同文本、音色、模型和设置复用已保存音频；重播应调用 get_voice_bubble。失败不自动重试。",
+        "仅当用户明确要求调用 ElevenLabs 付费生成语音时使用。用户指定的 model_id、voice_id 优先；未指定才使用服务端默认值。先通过 list_voice_options 将模型/音色名称匹配为真实 ID；名称不唯一时询问用户，不得编造 ID。v4/v4 Turbo 仅使用 stability、similarity_boost，忽略 style、speed、use_speaker_boost；播放器倍速不受影响。相同文本、音色、模型和设置复用已保存音频；重播应调用 get_voice_bubble。失败不自动重试。",
       inputSchema: generationSchema,
       annotations: {
         readOnlyHint: false,

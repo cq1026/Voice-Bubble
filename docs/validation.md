@@ -1,18 +1,20 @@
 # Cloudflare 适配验收记录
 
-日期：2026-10-15。工具链 Node.js 24.19.0、Wrangler 4.151.0（配套 Miniflare/workerd）、
-实际 Chromium。**生产应用运行于 Workers，不是 Node；所有 Cloudflare 资源测试使用本地模拟资源。**
+日期：2026-10-16。工具链 Node.js 24.19.0、Wrangler 4.151.0（配套 Miniflare/workerd）、
+实际 Chromium。**生产应用运行于 Workers，不是 Node。以下自动化套件使用本地模拟资源；
+2026-10-16 已补充真实线上验证，见 [实际部署记录](deployment-progress.md)。**
 
 ## 已验证
 
-- TypeScript 类型检查；Wrangler `deploy --dry-run` 成功。部署包约 797 KiB gzip，无 `nodejs_compat`，
+- TypeScript 类型检查；Wrangler `deploy --dry-run` 成功。部署包约 799 KiB gzip，无 `nodejs_compat`，
   不导入 `node:fs`、`node:sqlite` 或 Express；UI 与真实 demo WAV 为 Worker 模块。
 - 实际执行本地 D1 迁移；`wrangler dev --local` 启动，`/healthz`、MCP demo 和真实 R2 Range 206 成功。
-- 20 项服务端测试：使用本地 D1/R2 绑定、生产 Worker bundle 和隔离的模拟上游。
+- 27 项服务端测试：使用本地 D1/R2 绑定、生产 Worker bundle 和隔离的模拟上游。
   覆盖真实波形/时长、运行时销毁重建后持久化及旧签名链接、8 个独立服务实例并发去重、
   request ID 竞争冲突、失败后禁止自动重试、过期 pending 的显式重试、旧尝试版本隔离、
   R2 故障、D1 发布事务回滚与 R2 孤立对象保留、对象丢失不生成、默认付费禁用、密钥脱敏，
   以及实际 workerd 内从 MCP 到模拟 ElevenLabs 的并发请求全链路。
+- v4/Turbo/v3/v2 参数能力、真实 ID 校验、字符限制、有效设置缓存、PCM 转 WAV、格式拒绝和脱敏错误。Turbo WebSocket 的握手、单音色注册、输入/关闭帧、最终帧、流截断、超时，以及实际 workerd 内 Socket→R2/D1 复用链路均使用模拟上游。
 - 真实 workerd MCP 初始化、工具列表、UI resource 的 MIME/CSP/无边框元数据；生产无测试页面。
   R2 音频支持完整内容、HEAD、字节/后缀 Range、206/416、If-Range、CORS 和签名过期刷新。
   OAuth JWT 在 workerd 内验证签名、issuer、audience、本人 sub、scope、过期，JWKS 使用测试 fixture。
@@ -21,20 +23,20 @@
   粉色选项、重开不自动播放、链接过期的只读刷新、加载失败的有界恢复、CSP 拦截。
 
 测试中的 `ENABLE_PAID_GENERATION=true` 只出现在隔离的模拟供应商用例，外部网络被替换/拒绝，
-无真实 ElevenLabs API Key。Wrangler 生产和本地配置均为 `false`；**真实付费请求为 0**。
+无真实 ElevenLabs API Key。Wrangler 生产配置为 `true`、本地配置仍为 `false`；**真实付费请求为 0**。
 
 ## 尚未验证 / 需要你的账户
 
 | 项目 | 当前状态 |
 | --- | --- |
-| Cloudflare 登录、R2 启用、远端资源创建 | 未授权；`wrangler whoami` 明确返回未登录 |
-| 真实账户 D1 迁移和 Worker 发布 | 未执行；dry-run 不代表部署成功 |
-| workers.dev 公网 TLS、Cloudflare CPU/用量限制 | 未验证；本地运行不复现公网配额 |
+| Cloudflare 登录、R2 启用、远端资源创建 | 2026-10-16 已完成；R2 私有、无公开域名 |
+| 真实账户 D1 迁移和 Worker 发布 | 已完成；线上 demo 写入 D1/R2 并成功重播 |
+| workers.dev 公网 TLS、Cloudflare CPU/用量限制 | 公网 TLS 与 demo 已通过；未做配额或负载压测 |
 | D1 跨区域副本/Cloudflare 多地点并发故障 | 未做线上压测；原子 SQL 和版本隔离在本地真实 D1 实现验证 |
-| Auth0/其他真实 IdP + ChatGPT OAuth 登录 | 未验证；目前为测试密钥/JWKS |
-| ChatGPT 内实际气泡、平台容器与无边框请求 | 未验证；本地 AppBridge 结果不能替代宿主验收 |
+| Auth0/其他真实 IdP + ChatGPT OAuth 登录 | Auth0 真实本人令牌、JWKS、MCP 验证通过；本人已确认 ChatGPT 登录和 demo 成功 |
+| ChatGPT 内实际气泡、平台容器与无边框请求 | 本人已确认正常显示、播放 demo；平台外框由宿主控制 |
 | ChatGPT 手机客户端 / Safari | 未验证；手机宽度仅 Chromium |
-| ElevenLabs 真实音质、模型权限和计费 | 未执行，保持付费关闭 |
+| ElevenLabs 真实音质、模型权限和计费 | 未执行真实 TTS；本次授权启用生产开关 |
 
 Cloudflare 部署页面和字段见 [部署指南](cloudflare.md)，ChatGPT 逐项验收见 [接入说明](chatgpt.md)。
 旧版的 Docker 验证不作为当前 Workers 部署的证明。

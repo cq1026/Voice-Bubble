@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "voice-bubble",
+  "account_id": "720f81d5f65520dcc97d1238e0191981",
   "main": "src/server/app.ts",
   "compatibility_date": "2026-10-01",
   "workers_dev": true,
@@ -13,11 +14,11 @@
   "observability": { "enabled": false },
   "vars": {
     "AUTH_MODE": "oauth",
-    "PUBLIC_BASE_URL": "https://voice-bubble.YOUR-SUBDOMAIN.workers.dev",
-    "OAUTH_ISSUER": "https://YOUR-TENANT.auth0.com/",
-    "OAUTH_JWKS_URL": "https://YOUR-TENANT.auth0.com/.well-known/jwks.json",
-    "ENABLE_PAID_GENERATION": "false",
-    "ELEVENLABS_MODEL_ID": "eleven_multilingual_v2",
+    "PUBLIC_BASE_URL": "https://voice-bubble.296056703.workers.dev",
+    "OAUTH_ISSUER": "https://dev-8wtgry41v4vu7opw.us.auth0.com/",
+    "OAUTH_JWKS_URL": "https://dev-8wtgry41v4vu7opw.us.auth0.com/.well-known/jwks.json",
+    "ENABLE_PAID_GENERATION": "true",
+    "ELEVENLABS_MODEL_ID": "eleven_v4",
     "BUBBLE_PALETTE": "lavender",
     "MEDIA_URL_TTL_SECONDS": "600",
   },
@@ -25,7 +26,7 @@
     {
       "binding": "DB",
       "database_name": "voice-bubble",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "2eb77a1c-e09e-49f0-9141-12254a56a41b",
       "migrations_dir": "migrations",
     },
   ],

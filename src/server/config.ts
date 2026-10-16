@@ -25,7 +25,7 @@ const schema = z.object({
   OAUTH_OWNER_SUB: z.string().min(1).optional(),
   ELEVENLABS_API_KEY: z.string().optional(),
   ELEVENLABS_VOICE_ID: z.string().optional(),
-  ELEVENLABS_MODEL_ID: z.string().default("eleven_multilingual_v2"),
+  ELEVENLABS_MODEL_ID: z.string().default("eleven_v4"),
   ENABLE_PAID_GENERATION: z.enum(["true", "false"]).default("false"),
   BUBBLE_PALETTE: z.enum(["lavender", "pink"]).default("lavender"),
   MEDIA_URL_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(600),

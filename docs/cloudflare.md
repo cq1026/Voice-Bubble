@@ -3,9 +3,9 @@
 本版将 MCP 和媒体分发实际运行在 Workers：R2 私有 bucket 保存 WAV，D1 保存元数据、
 去重记录和任务状态。无需 Node 服务进程、持久磁盘、Docker、自购域名或 Durable Object。
 
-当前状态：代码、生产打包、本地 workerd 的 D1/R2 和播放器已验证；**未部署到你的 Cloudflare 账户**。
-本环境 `wrangler whoami` 返回未登录。不会使用临时预览账户替代你的私有持久资源。
-全部配置保持 `ENABLE_PAID_GENERATION="false"`；demo 不需要 ElevenLabs Key。
+当前状态（2026-10-16）：**已部署到本人的 Cloudflare 账户**，真实 D1/R2、Auth0 本人登录、
+MCP 和线上 demo 已验证。实际配置见 [部署记录](deployment-progress.md)；以下保留通用配置指南。
+本仓库生产配置已授权启用 `ENABLE_PAID_GENERATION="true"`；本地配置继续为 false。demo 不需要 ElevenLabs Key。
 
 ## 1. 账户页面和需要填写的值
 
@@ -52,7 +52,7 @@ Cloudflare API Token 存入 CI 的 secret；需要账户范围的 Workers Script
 | `vars.AUTH_MODE` | 保持 `oauth` |
 | `vars.OAUTH_ISSUER` | 身份提供商的 issuer，例如你的 Auth0 tenant 的 HTTPS origin，保留其要求的末尾 `/` |
 | `vars.OAUTH_JWKS_URL` | 提供商 discovery 文档中的 `jwks_uri` |
-| `vars.ENABLE_PAID_GENERATION` | **保持字符串 `"false"`** |
+| `vars.ENABLE_PAID_GENERATION` | 生产为字符串 `"true"`；可改回 `"false"` 暂停新生成 |
 
 多个 Cloudflare 账户时，让 Wrangler 选择正确账户，或把非秘密的 `account_id` 添加到配置。
 `wrangler.local.jsonc` 仅供本机运行，不能用于公开部署；线上 Worker 会拒绝请求 origin 与配置不一致的访问。
@@ -163,8 +163,8 @@ ElevenLabs PCM 上限 16 MiB，网络超时 90 秒；读取失败不会自动重
 已验证：Wrangler dry-run、本地迁移和启动、真实 workerd MCP/UI、D1/R2 持久化与跨实例并发去重、
 失败/中断保护、OAuth JWT 和本人校验、真实浏览器播放/拖动/倍速/刷新。
 
-仍需要你的操作：Cloudflare 登录和 R2 启用、真实 D1/bucket 创建、workers.dev 子域和 OAuth 元数据填写、
-两个 Secrets、远端迁移与发布、Auth0 和 ChatGPT 登录验收。当前没有创建或修改你的远端账户资源。
+本次已完成 Cloudflare 和 Auth0 授权、D1/bucket 创建、真实域名和 OAuth 元数据填写、
+两个 Workers Secrets、远端迁移与发布、本人登录及线上 demo 验证。剩余 ChatGPT 账户端连接与宿主展示验收。
 
 真实 ElevenLabs 生成仍未执行。之后你明确要求启用时，添加 `ELEVENLABS_API_KEY` secret、配置真实音色，
 并在独立的启用步骤中修改付费开关和 `scripts/check-deploy.mjs` 的 demo 发布保护；不能仅靠聊天参数绕过关闭状态。

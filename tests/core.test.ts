@@ -394,3 +394,26 @@ test("D1 publication failure rolls back metadata/status, retains R2 recovery obj
     await c.close();
   }
 });
+
+test("a job published between polling metadata and status returns its audio without regenerating", async () => {
+  const provider = mockProvider(),
+    c = await context(true, provider);
+  try {
+    const first = await c.service.generate(input);
+    const store = new AudioStore(c.db, c.bucket, TEST_KEY);
+    const row = store.row.bind(store);
+    let reads = 0;
+    // Simulate publication immediately after the poll's metadata read:
+    // three cache probes and the first poll miss, but status is already ready.
+    store.row = async (id) => (++reads <= 4 ? null : row(id));
+    store.claim = async () => null;
+    const joined = new VoiceService(c.config, store, demo, provider);
+    assert.equal(
+      (await joined.generate(input)).structuredContent.audioId,
+      first.structuredContent.audioId,
+    );
+    assert.equal(provider.calls, 1);
+  } finally {
+    await c.close();
+  }
+});

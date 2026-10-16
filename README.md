@@ -5,7 +5,7 @@
 
 **当前运行架构：Cloudflare Workers + 私有 R2 + D1。** Express、Node HTTP 服务、磁盘 SQLite
 和 Docker 部署已移除。Node.js 24 仅用于构建、Wrangler 和测试，线上代码使用 Web APIs，
-不需要 `nodejs_compat`。当前 `ENABLE_PAID_GENERATION=false`，未执行真实付费生成。
+不需要 `nodejs_compat`。生产配置 `ENABLE_PAID_GENERATION=true`，默认模型 `eleven_v4`。首次真实付费生成仍由本人在 ChatGPT 中明确授权；自动测试和部署不生成真实语音。
 
 外观保持不变：左对齐，350 × 62 px、最大宽度 85%；左下角 9px，其余圆角 26px；
 浅紫 `#eee9fa` / 深紫 `#3e3557`，可在服务端选择粉色。只有播放/暂停、真实波形、剩余时长和
@@ -56,10 +56,12 @@ ElevenLabs Key、媒体签名密钥、owner subject 使用 Workers Secrets，不
 | --- | --- | --- |
 | `get_voice_bubble` | 读取、重播、刷新链接；`demo` 读取测试音频 | 否 |
 | `list_voice_options` | 从 ElevenLabs 获取真实音色 ID、TTS 模型 | 否；需要 API Key |
-| `generate_voice_bubble` | 生成、存储并返回气泡 | 新内容可能收费；当前禁用 |
+| `generate_voice_bubble` | 生成、存储并返回气泡 | 新内容收费；必须明确授权 |
 
 生成接受 `text`（1–3000 字符）、可选 `voice_id`、`model_id`、`voice_settings`、`request_id`，
-必须包含 `confirm_paid_generation: true`。默认音色来自配置，其他 ID 必须从账户或工具列表选择。
+必须包含 `confirm_paid_generation: true`。用户指定模型/音色优先；未指定模型默认 v4，未指定音色则使用服务端默认音色（若未配置则要求选择）。ID 必须从 `list_voice_options` 选择，不按名称猜测。
+v4 和 v4 Turbo 只发送 stability、similarity_boost；style、speed、speaker boost 被过滤，播放器倍速保持可用。其他模型按模型能力过滤 Style、Speaker Boost。模型或格式不兼容时明确报错，不降级。
+协议、限制与验证边界见 [ElevenLabs 模型兼容说明](docs/elevenlabs-models.md)。
 音色和模型在生成前向 ElevenLabs 校验；PCM 响应上限 16 MiB，以控制 Worker 内存。
 `structuredContent` 返回稳定音频 ID、时长、波形和播放格式；签名 URL 仅在 `_meta.playback` 中。
 
@@ -93,7 +95,10 @@ npm run deploy:check
 浏览器通过官方 AppBridge 在 sandbox iframe 内播放真实 WAV，验证拖动、倍速、重开、链接刷新、CSP。
 ElevenLabs 使用模拟上游，测试禁止外网生成。
 
-**Cloudflare 账户资源、公网 workers.dev、真实 OAuth 登录、ChatGPT 实际容器和真实付费生成尚未验证。**
+**2026-10-16 已部署并验证真实 Cloudflare D1/R2、Auth0 本人登录、MCP 和线上 demo 播放。**
+MCP：`https://voice-bubble.296056703.workers.dev/mcp`。生产配置已启用付费生成，仍需逐次明确授权。
+本人已确认 ChatGPT 内 demo 显示、播放正常，真实音色列表可用；真实付费生成未执行。
+本次资源和线上检查见 [实际部署记录](docs/deployment-progress.md)。
 详情见 [验收记录](docs/validation.md) 和 [官方来源](docs/references.md)。
 
 ## 目录

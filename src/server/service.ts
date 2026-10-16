@@ -4,6 +4,8 @@ import {
   ElevenLabs,
   generationSchema,
   settingsSchema,
+  settingsForModel,
+  OUTPUT_FORMAT,
   type GenerateInput,
   type SpeechProvider,
 } from "./elevenlabs.js";
@@ -57,26 +59,47 @@ export class VoiceService {
       !/^[A-Za-z0-9_-]{1,100}$/.test(model)
     )
       throw new SafeError("INVALID_CONFIG", "服务端音色或模型 ID 格式不正确。");
-    const settings = settingsSchema.parse(input.voice_settings ?? {}),
-      text = input.text.replace(/\r\n?/g, "\n");
-    const id = await audioId(
-      JSON.stringify({
-        version: 1,
-        text,
-        voice,
-        model,
-        settings,
-        format: "pcm_24000",
-      }),
+    const text = input.text.replace(/\r\n?/g, "\n");
+    const key = (settings: object) =>
+      audioId(
+        JSON.stringify({
+          version: 1,
+          text,
+          voice,
+          model,
+          settings,
+          format: OUTPUT_FORMAT,
+        }),
+      );
+    // Keep every pre-upgrade cache entry readable, even when generation is off.
+    const originalId = await key(
+      settingsSchema.parse(input.voice_settings ?? {}),
     );
-    await this.store.bindRequest(input.request_id, id);
-    // Existing records are never regenerated, including when their R2 object has been lost.
-    if (await this.store.row(id)) return this.result(id);
+    if (await this.store.row(originalId)) {
+      await this.store.bindRequest(input.request_id, originalId);
+      return this.result(originalId);
+    }
+    const documentedSettings = settingsForModel(model, input.voice_settings);
+    const documentedId = await key(documentedSettings);
+    if (await this.store.row(documentedId)) {
+      await this.store.bindRequest(input.request_id, documentedId);
+      return this.result(documentedId);
+    }
     if (!this.config.paidEnabled)
       throw new SafeError(
         "PAID_GENERATION_DISABLED",
-        "付费生成默认关闭。明确同意付费后，需由部署者开启 ENABLE_PAID_GENERATION；已有音频仍可播放。",
+        "付费生成已关闭。需由部署者开启 ENABLE_PAID_GENERATION；已有音频仍可播放。",
       );
+    // Read-only validation precedes claiming a paid job. Never infer IDs from names.
+    const capabilities = await this.provider.validate(voice, model, text);
+    const settings = settingsForModel(
+      model,
+      input.voice_settings,
+      capabilities || undefined,
+    );
+    const id = await key(settings);
+    await this.store.bindRequest(input.request_id, id);
+    if (await this.store.row(id)) return this.result(id);
     const token = await this.store.claim(id, input.retry_failed);
     if (!token) {
       // Briefly join an in-progress request across isolates, without ever re-entering generation.
@@ -85,21 +108,19 @@ export class VoiceService {
         if ((await this.store.job(id))?.status !== "pending") break;
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
+      // Publication can happen between row() and job(); read once more after ready.
+      if (await this.store.row(id)) return this.result(id);
       throw new SafeError(
         "GENERATION_NOT_RETRIED",
         `任务正在处理、曾失败或结果不确定。audio_id: ${id}。稍后用 get_voice_bubble 读取；检查 ElevenLabs 用量后才能明确授权 retry_failed。`,
       );
     }
-    let synthesisStarted = false;
     try {
-      await this.provider.validate(voice, model);
-      synthesisStarted = true;
       const pcm = await this.provider.generate(text, voice, model, settings);
       await this.store.complete(id, token, pcmToWav(pcm));
     } catch (error) {
       const failed =
-        !synthesisStarted ||
-        (error instanceof SafeError && error.code === "PROVIDER_REJECTED");
+        error instanceof SafeError && error.code === "PROVIDER_REJECTED";
       // Even if recording failure itself fails, the committed pending claim prevents automatic re-entry.
       await this.store
         .finish(id, token, failed ? "failed" : "uncertain")

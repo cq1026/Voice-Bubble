@@ -1,7 +1,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPair, SignJWT, exportJWK } from "jose";
-import { Response as MFResponse } from "miniflare";
+import { Response as MFResponse, WebSocketPair } from "miniflare";
 import { makeRuntime, localBindings } from "./worker/runtime.js";
 import { RESOURCE_URI } from "../src/server/mcp.js";
 let c: Awaited<ReturnType<typeof makeRuntime>>;
@@ -364,7 +364,7 @@ test("full Worker ElevenLabs adapter coalesces concurrent MCP calls against a ne
       }
       if (url.pathname === "/v1/models")
         return MFResponse.json([
-          { model_id: "eleven_multilingual_v2", can_do_text_to_speech: true },
+          { model_id: "eleven_v4", can_do_text_to_speech: true },
         ]);
       return MFResponse.json({ voice_id: "voice-from-test-provider" });
     },
@@ -419,6 +419,100 @@ test("full Worker ElevenLabs adapter coalesces concurrent MCP calls against a ne
       200,
     );
     assert.ok(!JSON.stringify(results).includes("mock-worker-key"));
+  } finally {
+    await runtime.mf.dispose();
+  }
+});
+
+test("Turbo uses a real workerd WebSocket upgrade with fake upstream and persists complete PCM only once", async () => {
+  let sessions = 0;
+  const frames: any[] = [];
+  const runtime = await makeRuntime({
+    bindings: {
+      ...localBindings,
+      ENABLE_PAID_GENERATION: "true",
+      ELEVENLABS_API_KEY: "mock-worker-key",
+    },
+    outboundService: async (request) => {
+      const url = new URL(request.url);
+      assert.equal(url.origin, "https://api.elevenlabs.io");
+      assert.equal(request.headers.get("xi-api-key"), "mock-worker-key");
+      if (url.pathname === "/v1/models")
+        return MFResponse.json([
+          { model_id: "eleven_v4_turbo", can_do_text_to_speech: true },
+        ]);
+      if (url.pathname.startsWith("/v1/voices/"))
+        return MFResponse.json({ voice_id: "kai-fixture" });
+      assert.equal(url.pathname, "/v1/text-to-dialogue/stream-input");
+      assert.equal(url.searchParams.get("model_id"), "eleven_v4_turbo");
+      assert.equal(url.searchParams.get("output_format"), "pcm_24000");
+      assert.equal(request.headers.get("Upgrade"), "websocket");
+      sessions++;
+      const pair = new WebSocketPair();
+      pair[1].accept();
+      pair[1].addEventListener("message", (event) => {
+        const message = JSON.parse(String(event.data));
+        frames.push(message);
+        if (message.close_socket) {
+          pair[1].send(JSON.stringify({ audio: btoa("\0".repeat(48000)) }));
+          pair[1].send(JSON.stringify({ is_final: true }));
+          pair[1].close(1000);
+        }
+      });
+      return new MFResponse(null, { status: 101, webSocket: pair[0] });
+    },
+  });
+  async function generate() {
+    const response = await runtime.mf.dispatchFetch(
+      `${localBindings.PUBLIC_BASE_URL}/mcp`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "generate_voice_bubble",
+            arguments: {
+              text: "你好 Hello",
+              model_id: "eleven_v4_turbo",
+              voice_id: "kai-fixture",
+              voice_settings: { speed: 1.2, style: 1 },
+              confirm_paid_generation: true,
+            },
+          },
+        }),
+      },
+    );
+    return ((await response.json()) as any).result;
+  }
+  try {
+    const first = await generate();
+    assert.ok(!first.isError, JSON.stringify(first));
+    assert.equal(first.structuredContent.durationSeconds, 1);
+    assert.deepEqual(frames[0], {
+      voices: ["kai-fixture"],
+      voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+    });
+    assert.deepEqual(frames[1], {
+      inputs: [
+        { text: "你好 Hello", voice_id: "kai-fixture", new_turn: false },
+      ],
+    });
+    assert.deepEqual(frames[2], { close_socket: true });
+    assert.equal(
+      (await runtime.mf.dispatchFetch(first._meta.playback.url)).status,
+      200,
+    );
+    assert.equal(
+      (await generate()).structuredContent.audioId,
+      first.structuredContent.audioId,
+    );
+    assert.equal(sessions, 1);
   } finally {
     await runtime.mf.dispose();
   }
