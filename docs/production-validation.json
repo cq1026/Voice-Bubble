@@ -13,7 +13,7 @@
     "bytes": 437118,
     "signedLocallyForOperatorCheck": true
   },
-  "authenticatedMcpAndCatalog": "pending owner OAuth renewal",
+  "authenticatedMcpAndCatalog": "passed after owner OAuth renewal",
   "paidGenerationInvoked": false,
   "date": "2026-10-16",
   "githubCommit": "57bf0ad",
@@ -27,5 +27,75 @@
     "OAUTH_OWNER_SUB"
   ],
   "storageBindingsPreserved": true,
-  "realPaidTtsTested": false
+  "realPaidTtsTested": false,
+  "authenticatedChecks": {
+    "health": {
+      "ok": true,
+      "storage": "d1+r2",
+      "paidGeneration": true
+    },
+    "oauthMetadata": {
+      "resource": "https://voice-bubble.296056703.workers.dev/mcp",
+      "authorization_servers": [
+        "https://dev-8wtgry41v4vu7opw.us.auth0.com/"
+      ],
+      "scopes_supported": [
+        "voice:use"
+      ],
+      "bearer_methods_supported": [
+        "header"
+      ]
+    },
+    "unauthenticatedMcpStatus": 401,
+    "invalidTokenStatus": 401,
+    "serverInfo": {
+      "name": "Voice Bubble",
+      "version": "0.2.0"
+    },
+    "protocolVersion": "2025-11-25",
+    "tools": [
+      "get_voice_bubble",
+      "generate_voice_bubble",
+      "list_voice_options"
+    ],
+    "widget": {
+      "mimeType": "text/html;profile=mcp-app",
+      "htmlBytes": 834673,
+      "cspOrigin": "https://voice-bubble.296056703.workers.dev",
+      "prefersBorder": false
+    },
+    "demo": {
+      "audioId": "vb_7b273d46aaa99868bde20e5948b94654ffb7564e62a008070abded243b6dcb74",
+      "durationSeconds": 9.105,
+      "waveformBins": 64,
+      "wavBytes": 437118,
+      "fixtureSha256Matches": true
+    },
+    "range": {
+      "status": 206,
+      "contentRange": "bytes 0-63/437118",
+      "bytes": 64,
+      "cors": "*"
+    },
+    "headStatus": 200,
+    "unsignedMediaStatus": 403,
+    "expiredMediaStatus": 403,
+    "replayStableId": true,
+    "catalog": {
+      "voiceCount": 25,
+      "modelCount": 9,
+      "modelIds": [
+        "eleven_v4",
+        "eleven_v4_turbo",
+        "eleven_v3",
+        "eleven_v3_conversational",
+        "eleven_multilingual_v2",
+        "eleven_flash_v2_5",
+        "eleven_turbo_v2_5",
+        "eleven_turbo_v2",
+        "eleven_flash_v2"
+      ]
+    },
+    "paidGenerationInvoked": false
+  }
 }
