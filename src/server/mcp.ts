@@ -7,6 +7,12 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import { SafeError } from "./store.js";
+import {
+  audioIdSchema,
+  deleteSchema,
+  listSchema,
+  parseCursor,
+} from "./management.js";
 import { generationSchema } from "./elevenlabs.js";
 import type { VoiceService } from "./service.js";
 
@@ -147,6 +153,93 @@ export function createMcpServer(service: VoiceService, html: string) {
         ],
         structuredContent: await service.provider.catalog(),
       })),
+  );
+  server.registerTool(
+    "list_voice_bubbles",
+    {
+      title: "列出已保存语音",
+      description:
+        "按创建时间倒序列出本人已保存音频，默认20条，最多100条，使用 next_cursor 翻页。可用 source=elevenlabs 只列生成音频。voice_id/model_id 为 null 表示旧记录未知，不能编造。播放、下载和删除必须从实际结果或明确上下文选择完整 audio_id；目标不明确先让用户选择。不会生成语音。",
+      inputSchema: listSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      _meta: { securitySchemes },
+    },
+    async ({ limit, cursor, source }) =>
+      safe(async () => {
+        const data = await service.store.list(
+          limit,
+          parseCursor(cursor),
+          source,
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(data) }],
+          structuredContent: data,
+        };
+      }),
+  );
+  server.registerTool(
+    "get_voice_bubble_download",
+    {
+      title: "下载已保存 WAV",
+      description:
+        "为指定真实 audio_id 返回原始 WAV 的短期下载链接；过期后重新调用此工具，不生成语音。ID 必须来自列表或明确上下文，目标不清楚时询问用户。",
+      inputSchema: z.object({ audio_id: audioIdSchema }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      _meta: { securitySchemes },
+    },
+    async ({ audio_id }) =>
+      safe(async () => {
+        const link = await service.store.signedLink(
+          audio_id,
+          service.config.baseUrl,
+          service.config.mediaTtl,
+          "download",
+        );
+        const data = {
+          audio_id,
+          download_url: link.url,
+          expires_at: link.expiresAt,
+          mime_type: "audio/wav",
+        };
+        return {
+          content: [{ type: "text", text: JSON.stringify(data) }],
+          structuredContent: data,
+        };
+      }),
+  );
+  server.registerTool(
+    "delete_voice_bubble",
+    {
+      title: "永久删除一条语音",
+      description:
+        "永久删除一条明确指定的音频。必须先向用户展示完整 audio_id 并说明不可恢复，得到明确确认后才能传 confirm_delete=true。不能从‘刚才那条’猜测 ID，不能自动或批量删除。demo 受保护。删除中失败可对同一 ID 经确认后重试；pending/failed/uncertain 生成任务拒绝删除。此操作绝不生成语音。",
+      inputSchema: deleteSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      _meta: { securitySchemes, "openai/widgetAccessible": false },
+    },
+    async ({ audio_id, confirm_delete }) =>
+      safe(async () => {
+        const data = await service.store.deleteAudio(audio_id, confirm_delete);
+        return {
+          content: [{ type: "text", text: JSON.stringify(data) }],
+          structuredContent: data,
+        };
+      }),
   );
   return server;
 }

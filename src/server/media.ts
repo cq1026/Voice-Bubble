@@ -4,13 +4,16 @@ export const mediaHeaders = {
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "Range, If-Range",
   "Access-Control-Expose-Headers":
-    "Accept-Ranges, Content-Range, Content-Length, ETag",
+    "Accept-Ranges, Content-Range, Content-Length, ETag, Content-Disposition",
   "Cache-Control": "private, no-store",
   "Cross-Origin-Resource-Policy": "cross-origin",
 };
 export async function media(request: Request, store: AudioStore) {
   const url = new URL(request.url),
-    id = url.pathname.match(/^\/audio\/(vb_[a-f0-9]{64})\.wav$/)?.[1];
+    id = url.pathname.match(
+      /^\/(?:audio|download)\/(vb_[a-f0-9]{64})\.wav$/,
+    )?.[1],
+    purpose = url.pathname.startsWith("/download/") ? "download" : "audio";
   const headers = new Headers(mediaHeaders);
   if (request.method === "OPTIONS")
     return new Response(null, { status: 204, headers });
@@ -22,6 +25,9 @@ export async function media(request: Request, store: AudioStore) {
       id,
       url.searchParams.get("expires"),
       url.searchParams.get("sig"),
+      Date.now(),
+      url.searchParams.get("version"),
+      purpose,
     ))
   )
     return new Response(
@@ -34,9 +40,17 @@ export async function media(request: Request, store: AudioStore) {
   if (!row) return new Response(null, { status: 404, headers });
   const head = await store.bucket.head(row.object_key);
   if (!head) return new Response(null, { status: 404, headers });
+  if (
+    url.searchParams.get("version") != null &&
+    url.searchParams.get("version") !== (await store.incarnation(row))
+  )
+    return new Response(null, { status: 403, headers });
   const size = head.size;
   headers.set("Content-Type", "audio/wav");
-  headers.set("Content-Disposition", "inline");
+  headers.set(
+    "Content-Disposition",
+    purpose === "download" ? `attachment; filename="${id}.wav"` : "inline",
+  );
   headers.set("Accept-Ranges", "bytes");
   headers.set("ETag", head.httpEtag);
   let range = request.method === "GET" ? request.headers.get("Range") : null;
@@ -79,12 +93,44 @@ export async function media(request: Request, store: AudioStore) {
     headers.set("Content-Range", `bytes ${start}-${end}/${size}`);
   }
   headers.set("Content-Length", String(length));
-  if (request.method === "HEAD") return new Response(null, { status, headers });
+  if (request.method === "HEAD") {
+    const current = await store.row(id);
+    if (
+      !current ||
+      current.object_key !== row.object_key ||
+      !(await store.verify(
+        id,
+        url.searchParams.get("expires"),
+        url.searchParams.get("sig"),
+        Date.now(),
+        url.searchParams.get("version"),
+        purpose,
+      ))
+    ) {
+      headers.delete("Content-Length");
+      return new Response(null, { status: 403, headers });
+    }
+    return new Response(null, { status, headers });
+  }
   const object = await store.bucket.get(
     row.object_key,
     status === 206 ? { range: { offset, length } } : undefined,
   );
-  if (!object) {
+  // Recheck the incarnation after R2 I/O; a deletion marker revokes new reads.
+  const current = await store.row(id);
+  if (
+    !object ||
+    !current ||
+    current.object_key !== row.object_key ||
+    !(await store.verify(
+      id,
+      url.searchParams.get("expires"),
+      url.searchParams.get("sig"),
+      Date.now(),
+      url.searchParams.get("version"),
+      purpose,
+    ))
+  ) {
     headers.delete("Content-Length");
     headers.delete("Content-Range");
     return new Response(null, { status: 404, headers });

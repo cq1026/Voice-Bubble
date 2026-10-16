@@ -98,3 +98,10 @@ v4 系列会忽略 `style`、`speed`、`use_speaker_boost`，可设置 `stabilit
 不调用真实付费 TTS。真实 v4/v4 Turbo 音质、账户实际输出格式权限和首次完整生成链路，
 仍需本人通过上述明确授权的请求验收。Worker 仅校验 OAuth 本人身份与确认参数；
 “用户明确同意”的对话判断由 ChatGPT 按工具说明完成。
+
+## 已保存音频管理
+
+刷新应用工具列表，新增 list_voice_bubbles、get_voice_bubble_download、delete_voice_bubble。
+先列出语音，再用返回的实际 ID 播放或下载。需要删除时先核对完整 ID，明确确认后再删除。
+旧记录音色/模型未知时不能按名称猜测目标；demo 不能删除。详见 [管理和恢复说明](audio-management.md)。
+本次部署不会自动删除任何生产音频；生产删除需要以后由本人独立确认验收。

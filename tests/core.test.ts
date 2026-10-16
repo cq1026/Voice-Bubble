@@ -94,6 +94,8 @@ test("R2 audio, D1 metadata and signatures survive destruction/recreation of the
         id,
         link.searchParams.get("expires"),
         link.searchParams.get("sig"),
+        Date.now(),
+        link.searchParams.get("version"),
       ),
     );
     assert.ok(!(await reopened.verify(id, "1", link.searchParams.get("sig"))));

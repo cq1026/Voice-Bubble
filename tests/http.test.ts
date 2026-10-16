@@ -37,7 +37,7 @@ test("production Worker bundle handles MCP initialization, tools and official bo
   });
   assert.equal(init.serverInfo.name, "Voice Bubble");
   const list = await rpc("tools/list", {});
-  assert.equal(list.tools.length, 3);
+  assert.equal(list.tools.length, 6);
   assert.equal(
     list.tools.find((t: any) => t.name === "get_voice_bubble")._meta.ui
       .resourceUri,
@@ -280,7 +280,11 @@ test("OAuth discovery and owner JWT verification execute inside workerd with a f
       .setExpirationTime((overrides.exp as number) ?? "5m")
       .sign(privateKey);
   }
-  async function call(jwt?: string) {
+  async function call(
+    jwt?: string,
+    name = "get_voice_bubble",
+    args: object = { audio_id: "demo" },
+  ) {
     return runtime.mf.dispatchFetch(`${origin}/mcp`, {
       method: "POST",
       headers: {
@@ -292,7 +296,7 @@ test("OAuth discovery and owner JWT verification execute inside workerd with a f
         jsonrpc: "2.0",
         id: 1,
         method: "tools/call",
-        params: { name: "get_voice_bubble", arguments: { audio_id: "demo" } },
+        params: { name, arguments: args },
       }),
     });
   }
@@ -334,6 +338,52 @@ test("OAuth discovery and owner JWT verification execute inside workerd with a f
     ])
       assert.equal((await call(await token(bad))).status, 401);
     assert.equal((await call("not-a-jwt")).status, 401);
+    for (const name of [
+      "list_voice_bubbles",
+      "get_voice_bubble_download",
+      "delete_voice_bubble",
+    ]) {
+      const args =
+        name === "list_voice_bubbles"
+          ? {}
+          : {
+              audio_id: result.structuredContent.audioId,
+              confirm_delete: true,
+            };
+      for (const jwt of [
+        undefined,
+        "invalid",
+        await token({ sub: "other-person" }),
+        await token({ scope: "other" }),
+        await token({ exp: 1 }),
+      ])
+        assert.equal((await call(jwt, name, args)).status, 401);
+    }
+    const listed = await call(await token(), "list_voice_bubbles", {});
+    assert.equal(
+      ((await listed.json()) as any).result.structuredContent.total_count,
+      1,
+    );
+    const downloaded = await call(await token(), "get_voice_bubble_download", {
+      audio_id: result.structuredContent.audioId,
+    });
+    const downloadResult = ((await downloaded.json()) as any).result;
+    assert.equal(
+      (
+        await runtime.mf.dispatchFetch(
+          downloadResult.structuredContent.download_url,
+        )
+      ).status,
+      200,
+    );
+    assert.equal(
+      (
+        await runtime.mf.dispatchFetch(
+          `${origin}/delete/${result.structuredContent.audioId}`,
+        )
+      ).status,
+      404,
+    );
     assert.equal(
       (await runtime.mf.dispatchFetch(`${origin}/__test/host`)).status,
       404,

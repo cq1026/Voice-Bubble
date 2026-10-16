@@ -117,7 +117,7 @@ export class VoiceService {
     }
     try {
       const pcm = await this.provider.generate(text, voice, model, settings);
-      await this.store.complete(id, token, pcmToWav(pcm));
+      await this.store.complete(id, token, pcmToWav(pcm), { voice, model });
     } catch (error) {
       const failed =
         error instanceof SafeError && error.code === "PROVIDER_REJECTED";

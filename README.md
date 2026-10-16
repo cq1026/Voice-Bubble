@@ -55,6 +55,9 @@ ElevenLabs Key、媒体签名密钥、owner subject 使用 Workers Secrets，不
 | 工具 | 用途 | 是否生成 |
 | --- | --- | --- |
 | `get_voice_bubble` | 读取、重播、刷新链接；`demo` 读取测试音频 | 否 |
+| `list_voice_bubbles` | 分页列出已保存语音及数量/大小 | 否 |
+| `get_voice_bubble_download` | 获取临时 WAV 下载链接 | 否 |
+| `delete_voice_bubble` | 明确确认后永久删除指定单条；保护 demo | 否 |
 | `list_voice_options` | 从 ElevenLabs 获取真实音色 ID、TTS 模型 | 否；需要 API Key |
 | `generate_voice_bubble` | 生成、存储并返回气泡 | 新内容收费；必须明确授权 |
 
@@ -64,6 +67,10 @@ v4 和 v4 Turbo 只发送 stability、similarity_boost；style、speed、speaker
 协议、限制与验证边界见 [ElevenLabs 模型兼容说明](docs/elevenlabs-models.md)。
 音色和模型在生成前向 ElevenLabs 校验；PCM 响应上限 16 MiB，以控制 Worker 内存。
 `structuredContent` 返回稳定音频 ID、时长、波形和播放格式；签名 URL 仅在 `_meta.playback` 中。
+
+## 音频管理
+
+可以直接在 ChatGPT 说“列出最近 10 条语音”“播放第 3 条”“下载这条 WAV”。删除前必须展示完整 ID 并获得明确确认。新增工具、分页、删除恢复和兼容迁移见 [音频管理说明](docs/audio-management.md)。
 
 ## 持久化和计费保护
 

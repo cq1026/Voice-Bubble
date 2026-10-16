@@ -51,10 +51,12 @@ export async function makeRuntime(
   const db = await mf.getD1Database("DB"),
     bucket = await mf.getR2Bucket("AUDIO");
   if (migrate) {
-    const sql = readFileSync("migrations/0001_initial.sql", "utf8").replace(
-      /^--.*$/gm,
-      "",
-    );
+    const sql = readdirSync("migrations")
+      .filter((name) => name.endsWith(".sql"))
+      .sort()
+      .map((name) => readFileSync(path.join("migrations", name), "utf8"))
+      .join("\n")
+      .replace(/^--.*$/gm, "");
     await db.batch(
       sql
         .split(";")

@@ -18,7 +18,10 @@ export async function handleRequest(
       "Referrer-Policy": "no-referrer",
       "Cache-Control": "no-store",
     });
-  if (url.pathname.startsWith("/audio/"))
+  if (
+    url.pathname.startsWith("/audio/") ||
+    url.pathname.startsWith("/download/")
+  )
     for (const [key, value] of Object.entries(mediaHeaders))
       headers.set(key, value);
   try {
@@ -52,7 +55,10 @@ export async function handleRequest(
         { headers },
       );
     }
-    if (url.pathname.startsWith("/audio/")) {
+    if (
+      url.pathname.startsWith("/audio/") ||
+      url.pathname.startsWith("/download/")
+    ) {
       const response = await media(
         request,
         new AudioStore(env.DB, env.AUDIO, config.signingKey),
