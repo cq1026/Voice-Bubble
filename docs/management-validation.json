@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-16",
+  "implementationCommit": "2cd2761",
+  "workerVersion": "d420ec28-ceaa-408f-bd06-ffcea6b0778a",
+  "migrationApplied": "0002_audio_management.sql",
+  "typecheckPassed": true,
+  "serverTestsPassed": 38,
+  "browserTestsPassed": 8,
+  "deployCheckPassed": true,
+  "productionReadOnlyChecks": {
+    "tools": [
+      "get_voice_bubble",
+      "generate_voice_bubble",
+      "list_voice_options",
+      "list_voice_bubbles",
+      "get_voice_bubble_download",
+      "delete_voice_bubble"
+    ],
+    "pagination": true,
+    "audioCount": 2,
+    "totalByteLength": 1800362,
+    "playbackStatuses": [
+      200,
+      200
+    ],
+    "downloadStatuses": [
+      200,
+      200
+    ],
+    "attachment": true,
+    "rangeStatus": 206,
+    "downloadRefreshHeadStatus": 200,
+    "unsignedMediaStatus": 403,
+    "unauthenticatedMcpStatus": 401,
+    "originalWavBytesUnchanged": true,
+    "originalAudioJobsRequestsUnchanged": true,
+    "deletionMarkerCount": 0,
+    "oldVoiceAndModelMetadata": "unknown/null"
+  },
+  "existing284SecondAudioPreserved": true,
+  "secretsAndBindingsPreserved": true,
+  "paidGenerationInvoked": false,
+  "productionDeleteInvoked": false,
+  "productionDeleteVerified": false,
+  "chatGPTManagementInteractionTested": false
+}

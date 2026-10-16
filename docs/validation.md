@@ -75,3 +75,14 @@ GitHub 实现提交 `57bf0ad` 已推送 main；Worker 版本 `ce2969be-379c-4cfd
 现有 demo WAV 的完整读取 200、Range 206 与仓库 fixture SHA-256 一致；此检查使用部署者本地签名的短期媒体链接，
 不是重新完成 OAuth 的 MCP 工具调用。本人已重新完成设备授权，签名、issuer、audience、scope 与原 owner subject 校验通过。发布后带身份的 demo、资源读取、链接刷新与 list_voice_options 全部复查通过；真实目录返回 25 个音色、9 个模型，包含 eleven_v4 和 eleven_v4_turbo。
 未发起任何真实付费生成。详见 [本次发布检查](production-validation.json)。
+
+## 2026-10-16 音频管理发布
+
+实现提交 `2cd2761`；Worker 版本 `d420ec28-ceaa-408f-bd06-ffcea6b0778a`；远端兼容迁移 `0002_audio_management.sql` 已成功应用。
+TypeScript、38 项服务端测试、8 项播放器测试、部署检查全部通过。新增测试覆盖分页与未知元数据、原始 WAV 下载/链接刷新与失效、本人权限、删除确认、demo 保护、正常与重复删除、R2 删除失败、D1 标记/事务清理失败及恢复、已提交但响应丢失、并发删除与重新生成隔离、旧链接永久撤销、重新生成的明确付费授权及旧数据迁移。
+
+真实线上仅执行只读验收：六个工具可发现；分页返回 2 条、共 1,800,362 字节；两条音频播放 GET 200、下载 GET 200、attachment、Range 206、刷新后 HEAD 200；无签名 403，未授权 MCP 401。
+原 28.4 秒音频和 9.105 秒 demo 的文件字节与发布前一致；audio/jobs/requests 原记录保持不变，删除标记数 0，Secrets 与资源绑定保留。
+
+**没有调用生产 delete_voice_bubble，没有执行真实付费 TTS，也没有把模拟删除成功标记为 Cloudflare 生产删除验收通过。** ChatGPT 内的管理对话与实际生产删除仍需本人在刷新工具后明确选择和确认。
+可机读结果见 [管理发布检查](management-validation.json)。
