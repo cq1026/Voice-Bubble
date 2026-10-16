@@ -67,3 +67,11 @@ Cloudflare 的模拟 `Request.cf` 元数据；服务未使用它，本地存储�
 手动查看本地测试宿主：`npm run dev:test` → `http://127.0.0.1:3100/__test/host`。
 该入口只编入测试 bundle，不能部署为公开应用。截图保存于 `test-results`；
 [浅色](screenshots/light.png)、[深色](screenshots/dark.png)、[手机宽度](screenshots/mobile.png) 为对应组件截图。
+
+## 2026-10-16 正式生成升级发布
+
+GitHub 实现提交 `57bf0ad` 已推送 main；Worker 版本 `ce2969be-379c-4cfd-8150-bfdfc406654a` 已发布。
+线上 `/healthz` 返回 paidGeneration:true；默认模型 eleven_v4。三个 Secrets、原 D1 ID、R2 Bucket、Auth0 配置均保留。
+现有 demo WAV 的完整读取 200、Range 206 与仓库 fixture SHA-256 一致；此检查使用部署者本地签名的短期媒体链接，
+不是重新完成 OAuth 的 MCP 工具调用。旧 owner 登录已过期，发布后带身份的 demo 与 list_voice_options 复查等待本人设备授权。
+未发起任何真实付费生成。详见 [本次发布检查](production-validation.json)。

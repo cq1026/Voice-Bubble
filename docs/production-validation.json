@@ -1,0 +1,31 @@
+{
+  "health": {
+    "ok": true,
+    "storage": "d1+r2",
+    "paidGeneration": true
+  },
+  "unauthenticatedMcpStatus": 401,
+  "oauthDiscoveryStatus": 200,
+  "existingDemoMedia": {
+    "fullStatus": 200,
+    "rangeStatus": 206,
+    "fixtureSha256Matches": true,
+    "bytes": 437118,
+    "signedLocallyForOperatorCheck": true
+  },
+  "authenticatedMcpAndCatalog": "pending owner OAuth renewal",
+  "paidGenerationInvoked": false,
+  "date": "2026-10-16",
+  "githubCommit": "57bf0ad",
+  "workerVersion": "ce2969be-379c-4cfd-8150-bfdfc406654a",
+  "defaultModel": "eleven_v4",
+  "serverTestsPassed": 27,
+  "browserTestsPassed": 8,
+  "secretsPreserved": [
+    "ELEVENLABS_API_KEY",
+    "MEDIA_SIGNING_KEY",
+    "OAUTH_OWNER_SUB"
+  ],
+  "storageBindingsPreserved": true,
+  "realPaidTtsTested": false
+}
